@@ -85,8 +85,8 @@ def extract_element_info(root, available_packages):
         element_name = item.attrib["name"]
 
         # Temporal limit to certain element for testing
-        if(element_name != "U25"):
-            continue
+        #if(element_name != "U25"):
+        #    continue
 
         print("Package {0}", package_name)
         available_elements[element_name] = element

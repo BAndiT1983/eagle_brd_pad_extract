@@ -101,8 +101,8 @@ def extract_element_info(root, available_packages):
             pad_y = float(pad_item.y)
 
             angle_degree = int(pad_item.rotation)
-            #if(element.rotation != 0):
-            #    angle_degree += int(element.rotation)
+            if(element.rotation != 0):
+                angle_degree += int(element.rotation)
 
             angle_rad = math.radians(angle_degree)
             rot_x = pad_x * math.cos(angle_rad) - \

@@ -2,10 +2,11 @@
 
 import csv
 import math
+import os
 import re
 import sys
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict
 from xml.etree import ElementTree
 
 import svg_output
@@ -179,6 +180,8 @@ def main():
         sys.exit(1)
 
     brd_file_name = sys.argv[1]
+    file_name_without_ext = os.path.splitext(brd_file_name)[0]
+
     tree = ElementTree.parse(brd_file_name)
     root = tree.getroot()
 
@@ -193,7 +196,10 @@ def main():
 
     extract_nets(root, available_elements)
 
-    svg_output.create_svg(available_elements)
+    # Check if PCB image layer file exists, if yes create output
+    if(os.path.isfile(file_name_without_ext + "_top.png")):
+        svg_output.create_svg(file_name_without_ext + "_top.png",
+                              file_name_without_ext + "_top_preview", available_elements)
 
     output_csv(brd_file_name + ".csv", available_elements)
 

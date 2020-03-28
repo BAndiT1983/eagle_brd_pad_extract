@@ -32,7 +32,6 @@ def create_svg(input_image_file, output_image_name, element_list):
 
             #rotation = ""
             # if(int(pad.rotation) != 0):
-            #   print("Rot: {0}", pad.rotation)
             #   rotation = str.format(
             #       "translate({1}, {2}) rotate({0}) ", str(-pad.rotation), str(pad_x), str(pad_y))
 

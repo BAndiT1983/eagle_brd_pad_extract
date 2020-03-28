@@ -85,10 +85,9 @@ def extract_element_info(root, available_packages):
         element_name = item.attrib["name"]
 
         # Temporal limit to certain element for testing
-        #if(element_name != "U25"):
+        #if(element_name != "PB-NW"):
         #    continue
 
-        print("Package {0}", package_name)
         available_elements[element_name] = element
 
         element.rotation = int(rotation_angle)
@@ -100,9 +99,9 @@ def extract_element_info(root, available_packages):
             pad_x = float(pad_item.x)
             pad_y = float(pad_item.y)
 
-            angle_degree = int(pad_item.rotation)
-            if(element.rotation != 0):
-                angle_degree += int(element.rotation)
+            angle_degree = int(element.rotation) #int(pad_item.rotation)
+            #if(element.rotation != 0):
+            #    angle_degree += int(element.rotation)
 
             angle_rad = math.radians(angle_degree)
             rot_x = pad_x * math.cos(angle_rad) - \
@@ -125,12 +124,10 @@ def extract_element_info(root, available_packages):
             #        pad_width, pad_height = pad_height, pad_width
 
             pad = Pad(pad_x, pad_y,
-                      pad_width, pad_height, angle_degree)
+                      pad_width, pad_height, angle_degree + pad_item.rotation)
 
             pad_list[name] = pad
-            print(pad)
         element.pads = pad_list
-        # element_package.pads.add(pad)
 
     return available_elements
 
@@ -191,8 +188,6 @@ def main():
 
     # Make list of available packages
     available_packages = get_available_packages(root)
-    # TODO: Remove next line, was added for a test
-    print(available_packages["0402-B"].pads["1"].x)
 
     # Iterate through elements on the board
     available_elements = dict()

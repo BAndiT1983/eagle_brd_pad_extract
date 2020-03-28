@@ -19,15 +19,19 @@ def get_pad_info(smd) -> Pad:
     width = float(smd.attrib["dx"])
     height = float(smd.attrib["dy"])
 
+    if width > height:
+        width, height = height, width
+
     pad = Pad(x, y, width, height)
 
     if("rot" in smd.attrib):
         rotation = smd.attrib["rot"]
+        
         digit_position = re.search(r"\d", rotation)
         rotation = int(rotation[digit_position.start():])
 
-        if(rotation > 180):
-            rotation -= 180
+        #if(rotation > 180):
+        #    rotation -= 180
 
         pad.rotation = int(rotation)
 
@@ -74,15 +78,15 @@ def extract_element_info(root, available_packages):
                 rotation_angle = rotation_angle[digit_position.start():]
 
         package_name = item.attrib["package"]
-        x = float(item.attrib['x'])
-        y = float(item.attrib['y'])
+        x = float(item.attrib["x"])
+        y = float(item.attrib["y"])
         element = Element(
             package_name, defaultdict(), x, y)
         element_name = item.attrib["name"]
 
         # Temporal limit to certain element for testing
-        # if(element_name != "U25"):
-        #    continue
+        if(element_name != "U25"):
+            continue
 
         print("Package {0}", package_name)
         available_elements[element_name] = element
@@ -97,8 +101,8 @@ def extract_element_info(root, available_packages):
             pad_y = float(pad_item.y)
 
             angle_degree = int(pad_item.rotation)
-            if(element.rotation != 0):
-                angle_degree += int(element.rotation)
+            #if(element.rotation != 0):
+            #    angle_degree += int(element.rotation)
 
             angle_rad = math.radians(angle_degree)
             rot_x = pad_x * math.cos(angle_rad) - \
@@ -133,11 +137,11 @@ def extract_element_info(root, available_packages):
 
 def output_csv(file_name, element_list: Dict[str, Element]):
 
-    f = open("./" + file_name, 'w')
+    f = open("./" + file_name, "w")
 
     with f:
 
-        writer = csv.writer(f, delimiter=';')
+        writer = csv.writer(f, delimiter=";")
 
         # Write CSV header
         header = ["INDEX", "PART_NAME", "PACKAGE_NAME", "PIN_INDEX", "PAD_NAME", "CENTER_X",
@@ -188,7 +192,7 @@ def main():
     # Make list of available packages
     available_packages = get_available_packages(root)
     # TODO: Remove next line, was added for a test
-    print(available_packages['0402-B'].pads["1"].x)
+    print(available_packages["0402-B"].pads["1"].x)
 
     # Iterate through elements on the board
     available_elements = dict()

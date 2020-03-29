@@ -41,8 +41,8 @@ def create_svg(input_image_file, output_image_name, element_list, board_width, b
 
             fill_color = "slategray"
 
-            d.append(draw.Rectangle(-pad_height / 2, -pad_width / 2, pad_height,
-                                    pad_width, fill=fill_color, transform=rotation))
+            #d.append(draw.Rectangle(-pad_height / 2, -pad_width / 2, pad_height,
+            #                        pad_width, fill=fill_color, transform=rotation))
 
             # Draw midpoint
             color = "red"  # if item.rotation != 45 else "yellow"

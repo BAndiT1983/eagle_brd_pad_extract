@@ -59,33 +59,36 @@ def get_available_packages(xml_root):
     return available_packages
 
 
-def extract_element_info(root, available_packages):
+def extract_element_info(root, available_packages, layer="top"):
 
     available_elements = dict()
 
     element_list = root.findall(".//element")
     for item in element_list:
-
         # Skip bottom layer for now
         rotation_angle = 0
         if("rot" in item.attrib):
             rotation_angle = item.attrib["rot"]
-            if(rotation_angle.startswith("MR")):
+            if((rotation_angle.startswith("MR") and layer == "top") or (rotation_angle.startswith("R") and layer == "bottom")):
                 continue
-            else:
+            # else:
                 # Find first digit position
-                digit_position = re.search(r"\d", rotation_angle)
-                rotation_angle = rotation_angle[digit_position.start():]
+            digit_position = re.search(r"\d", rotation_angle)
+            rotation_angle = rotation_angle[digit_position.start():]
+        elif(layer == 'bottom'):
+            continue
 
         package_name = item.attrib["package"]
-        x = float(item.attrib["x"])
+        x = float(item.attrib["x"]) 
+        if (layer == "bottom"):
+            x = -x 
         y = float(item.attrib["y"])
         element = Element(
             package_name, defaultdict(), x, y)
         element_name = item.attrib["name"]
 
         # Temporal limit to certain element for testing
-        #if(element_name != "U25"):
+        # if(element_name != "U25"):
         #    continue
 
         available_elements[element_name] = element
@@ -170,7 +173,9 @@ def extract_nets(xml_root, elements):
             pad_name = contact.attrib["pad"]
 
             if(element_name in elements):
-                elements[element_name].pads[pad_name].net = signal_name
+                element = elements[element_name]
+                if(pad_name in element.pads):
+                    element.pads[pad_name].net = signal_name
 
 
 def get_board_dimensions(xml_root):
@@ -217,17 +222,29 @@ def main():
     available_packages = get_available_packages(xml_root)
 
     # Iterate through elements on the board
-    available_elements = dict()
-    available_elements = extract_element_info(xml_root, available_packages)
+    available_elements_top = dict()
+    available_elements_top = extract_element_info(
+        xml_root, available_packages, "top")
 
-    extract_nets(xml_root, available_elements)
+    available_elements_bottom = dict()
+    available_elements_bottom = extract_element_info(
+        xml_root, available_packages, "bottom")
+
+    extract_nets(xml_root, available_elements_top)
+    extract_nets(xml_root, available_elements_bottom)
 
     # Check if PCB image layer file exists, if yes create output
     if(os.path.isfile(file_name_without_ext + "_top.png")):
         svg_output.create_svg(file_name_without_ext + "_top.png",
-                              file_name_without_ext + "_top_preview", available_elements, board_width, board_height)
+                              file_name_without_ext + "_top_preview", available_elements_top, board_width, board_height)
 
-    output_csv(brd_file_name + ".csv", available_elements)
+    output_csv(file_name_without_ext + "_top.csv", available_elements_top)
+
+    if(os.path.isfile(file_name_without_ext + "_bottom.png")):
+        svg_output.create_svg(file_name_without_ext + "_bottom.png",
+                              file_name_without_ext + "_bottom_preview", available_elements_bottom, board_width, board_height)
+
+    output_csv(file_name_without_ext + "_bottom.csv", available_elements_bottom)
 
 
 main()

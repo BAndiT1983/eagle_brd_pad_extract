@@ -1,16 +1,16 @@
 #!/usr/bin/python3
 
+from collections import defaultdict
 import csv
 import math
 import os
 import re
 import sys
-from collections import defaultdict
 from typing import Dict
 from xml.etree import ElementTree
 
-import svg_output
 from data_structs import Element, Package, Pad
+import svg_output
 
 
 def get_pad_info(smd) -> Pad:
@@ -26,11 +26,11 @@ def get_pad_info(smd) -> Pad:
 
     if("rot" in smd.attrib):
         rotation = smd.attrib["rot"]
-        
+
         digit_position = re.search(r"\d", rotation)
         rotation = int(rotation[digit_position.start():])
 
-        #if(rotation > 180):
+        # if(rotation > 180):
         #    rotation -= 180
 
         pad.rotation = int(rotation)
@@ -85,7 +85,7 @@ def extract_element_info(root, available_packages):
         element_name = item.attrib["name"]
 
         # Temporal limit to certain element for testing
-        #if(element_name != "PB-NW"):
+        #if(element_name != "U25"):
         #    continue
 
         available_elements[element_name] = element
@@ -99,8 +99,8 @@ def extract_element_info(root, available_packages):
             pad_x = float(pad_item.x)
             pad_y = float(pad_item.y)
 
-            angle_degree = int(element.rotation) #int(pad_item.rotation)
-            #if(element.rotation != 0):
+            angle_degree = int(element.rotation)  # int(pad_item.rotation)
+            # if(element.rotation != 0):
             #    angle_degree += int(element.rotation)
 
             angle_rad = math.radians(angle_degree)
@@ -173,6 +173,27 @@ def extract_nets(xml_root, elements):
                 elements[element_name].pads[pad_name].net = signal_name
 
 
+def get_board_dimensions(xml_root):
+    dimensions = xml_root.findall(".//wire[@layer=\"20\"]")
+
+    min_x = 0.0
+    min_y = 0.0
+    max_x = 0.0
+    max_y = 0.0
+
+    for dimension in dimensions:
+        if float(dimension.attrib["x1"]) < min_x:
+            min_x = float(dimension.attrib["x1"])
+        if float(dimension.attrib["y1"]) < min_y:
+            min_y = float(dimension.attrib["y1"])
+        if float(dimension.attrib["x2"]) > max_x:
+            max_x = float(dimension.attrib["x2"])
+        if float(dimension.attrib["y2"]) > max_y:
+            max_y = float(dimension.attrib["y2"])
+
+    return max_x - min_x, max_y - min_y
+
+
 def main():
 
     # Check argument count
@@ -181,24 +202,30 @@ def main():
         sys.exit(1)
 
     brd_file_name = sys.argv[1]
+    brd_file_path = os.path.dirname(brd_file_name)
+    os.chdir(brd_file_path)
+    brd_file_name = os.path.basename(brd_file_name)
     file_name_without_ext = os.path.splitext(brd_file_name)[0]
 
     tree = ElementTree.parse(brd_file_name)
-    root = tree.getroot()
+    xml_root = tree.getroot()
+
+    # Find board dimensions for visualization
+    board_width, board_height = get_board_dimensions(xml_root)
 
     # Make list of available packages
-    available_packages = get_available_packages(root)
+    available_packages = get_available_packages(xml_root)
 
     # Iterate through elements on the board
     available_elements = dict()
-    available_elements = extract_element_info(root, available_packages)
+    available_elements = extract_element_info(xml_root, available_packages)
 
-    extract_nets(root, available_elements)
+    extract_nets(xml_root, available_elements)
 
     # Check if PCB image layer file exists, if yes create output
     if(os.path.isfile(file_name_without_ext + "_top.png")):
         svg_output.create_svg(file_name_without_ext + "_top.png",
-                              file_name_without_ext + "_top_preview", available_elements)
+                              file_name_without_ext + "_top_preview", available_elements, board_width, board_height)
 
     output_csv(brd_file_name + ".csv", available_elements)
 

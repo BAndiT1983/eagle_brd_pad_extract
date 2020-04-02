@@ -4,7 +4,6 @@ Extracts pad position and dimensions from EAGLE .brd file to .csv, for automated
 
 ## Limitations
 
-* Only top layer at the moment
 * Some hardcoded values
 * Messy code
 * Optimizations missing

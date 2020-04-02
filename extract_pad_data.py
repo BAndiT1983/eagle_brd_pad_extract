@@ -1,39 +1,56 @@
 #!/usr/bin/python3
 
-from collections import defaultdict
 import csv
 import math
 import os
 import re
 import sys
+from collections import defaultdict
 from typing import Dict
 from xml.etree import ElementTree
 
-from data_structs import Element, Package, Pad
 import svg_output
+from data_structs import Element, Package, Pad, SMDPad, ViaPad, Layer
 
 
-def get_pad_info(smd) -> Pad:
-    x = float(smd.attrib["x"])
-    y = float(smd.attrib["y"])
+def get_general_pad_info(pad) -> Pad:
+    x = float(pad.attrib["x"])
+    y = float(pad.attrib["y"])
+
+    return Pad(x, y)
+
+
+def get_smd_pad_info(general_pad_info, smd) -> SMDPad:
     width = float(smd.attrib["dx"])
-    height = float(smd.attrib["dy"])
+    length = float(smd.attrib["dy"])
 
-    if width > height:
-        width, height = height, width
+    # 0 is horizontal, 90 degrees is vertical
+    angle_degree = 0
+    if width > length:
+        width, length = length, width
+        angle_degree += 90
 
-    pad = Pad(x, y, width, height)
+    pad = SMDPad(general_pad_info.x, general_pad_info.y, length, width)
 
-    if("rot" in smd.attrib):
+    if "rot" in smd.attrib:
         rotation = smd.attrib["rot"]
 
         digit_position = re.search(r"\d", rotation)
-        rotation = int(rotation[digit_position.start():])
+        angle_degree += int(rotation[digit_position.start():])
 
-        # if(rotation > 180):
-        #    rotation -= 180
+    # Limit rotation
+    if angle_degree >= 180:
+        angle_degree -= 180
 
-        pad.rotation = int(rotation)
+    pad.rotation = angle_degree
+
+    return pad
+
+
+def get_via_pad_info(general_pad_info, via) -> ViaPad:
+    drill = float(via.attrib["drill"])
+
+    pad = ViaPad(general_pad_info.x, general_pad_info.y, drill * 2, drill)
 
     return pad
 
@@ -46,49 +63,62 @@ def get_available_packages(xml_root):
         package_name = item.attrib["name"]
 
         # Extract pad data, positions are offsets
-        smd_list = item.findall("smd")
-        pad_list = dict()
-        for smd in smd_list:
-            pad = get_pad_info(smd)
-            pad_name = smd.attrib["name"]
-            pad_list[pad_name] = pad
+        smd_pad_list = dict()
+        via_pad_list = dict()
 
-        package = Package(pad_list)
+        smd_list = item.findall("smd")
+        for smd in smd_list:
+            pad = get_general_pad_info(smd)
+            pad = get_smd_pad_info(pad, smd)
+            pad_name = smd.attrib["name"]
+            smd_pad_list[pad_name] = pad
+
+        pad_list = item.findall("pad")
+        for via in pad_list:
+            pad = get_general_pad_info(via)
+            pad = get_via_pad_info(pad, via)
+            pad_name = via.attrib["name"]
+            via_pad_list[pad_name] = pad
+
+        package = Package(smd_pad_list, via_pad_list)
         available_packages[package_name] = package
 
     return available_packages
 
 
 def extract_element_info(root, available_packages, layer="top"):
-
     available_elements = dict()
 
     element_list = root.findall(".//element")
     for item in element_list:
         # Skip bottom layer for now
         rotation_angle = 0
-        if("rot" in item.attrib):
+        if "rot" in item.attrib:
             rotation_angle = item.attrib["rot"]
-            if((rotation_angle.startswith("MR") and layer == "top") or (rotation_angle.startswith("R") and layer == "bottom")):
+            if (rotation_angle.startswith("MR") and layer == "top") or (
+                    rotation_angle.startswith("R") and layer == "bottom"):
                 continue
             # else:
-                # Find first digit position
+            # Find first digit position
             digit_position = re.search(r"\d", rotation_angle)
             rotation_angle = rotation_angle[digit_position.start():]
-        elif(layer == 'bottom'):
+        elif layer == 'bottom':
             continue
 
         package_name = item.attrib["package"]
-        x = float(item.attrib["x"]) 
-        if (layer == "bottom"):
-            x = -x 
+        x = float(item.attrib["x"])
+        if layer == "bottom":
+            x = -x
         y = float(item.attrib["y"])
         element = Element(
-            package_name, defaultdict(), x, y)
+            package_name, defaultdict(), defaultdict(), x, y)
         element_name = item.attrib["name"]
 
         # Temporal limit to certain element for testing
-        # if(element_name != "U25"):
+        # if not package_name.startswith("DFN") and not package_name.startswith("QFN"):
+        #    continue
+
+        #if element_name != "U$5":
         #    continue
 
         available_elements[element_name] = element
@@ -97,8 +127,8 @@ def extract_element_info(root, available_packages, layer="top"):
 
         element_package = available_packages[package_name]
 
-        pad_list = dict()
-        for name, pad_item in element_package.pads.items():
+        smd_pad_list = dict()
+        for name, pad_item in element_package.smd_pads.items():
             pad_x = float(pad_item.x)
             pad_y = float(pad_item.y)
 
@@ -107,10 +137,8 @@ def extract_element_info(root, available_packages, layer="top"):
             #    angle_degree += int(element.rotation)
 
             angle_rad = math.radians(angle_degree)
-            rot_x = pad_x * math.cos(angle_rad) - \
-                pad_y * math.sin(angle_rad)
-            rot_y = pad_x * math.sin(angle_rad) + \
-                pad_y * math.cos(angle_rad)
+            rot_x = pad_x * math.cos(angle_rad) - pad_y * math.sin(angle_rad)
+            rot_y = pad_x * math.sin(angle_rad) + pad_y * math.cos(angle_rad)
 
             pad_x = rot_x
             pad_y = rot_y
@@ -119,24 +147,53 @@ def extract_element_info(root, available_packages, layer="top"):
             pad_y += element.y
 
             pad_width = pad_item.width
-            pad_height = pad_item.height
+            pad_length = pad_item.length
 
             # if("rot" in pad_item.attrib):
             #    rot = pad_item.attrib["rot"]
             #    if(rot == "R90" or rot == "R270"):
             #        pad_width, pad_height = pad_height, pad_width
 
-            pad = Pad(pad_x, pad_y,
-                      pad_width, pad_height, angle_degree + pad_item.rotation)
+            angle_degree += pad_item.rotation
+            if angle_degree >= 180:
+                angle_degree -= 180
 
-            pad_list[name] = pad
-        element.pads = pad_list
+            pad = SMDPad(pad_x, pad_y,
+                         pad_length, pad_width, angle_degree)
+
+            smd_pad_list[name] = pad
+        element.smd_pads = smd_pad_list
+
+        via_pad_list = dict()
+        for name, pad_item in element_package.via_pads.items():
+            pad_x = float(pad_item.x)
+            pad_y = float(pad_item.y)
+            pad_drill = float(pad_item.drill) + 0.5
+            pad_length = pad_drill * 2
+
+            angle_degree = int(element.rotation)  # int(pad_item.rotation)
+            # if(element.rotation != 0):
+            #    angle_degree += int(element.rotation)
+
+            angle_rad = math.radians(angle_degree)
+            rot_x = pad_x * math.cos(angle_rad) - pad_y * math.sin(angle_rad)
+            rot_y = pad_x * math.sin(angle_rad) + pad_y * math.cos(angle_rad)
+
+            pad_x = rot_x
+            pad_y = rot_y
+
+            pad_x += element.x
+            pad_y += element.y
+
+            pad = ViaPad(pad_x, pad_y, pad_length, pad_drill + 0.5, angle_degree, Layer.TOP, pad_drill)
+
+            via_pad_list[name] = pad
+            element.via_pads = via_pad_list
 
     return available_elements
 
 
 def output_csv(file_name, element_list: Dict[str, Element]):
-
     f = open("./" + file_name, "w")
 
     with f:
@@ -152,9 +209,10 @@ def output_csv(file_name, element_list: Dict[str, Element]):
         overall_index = 0
         for element_name, element in element_list.items():
             pad_index = 0
-            for pad_name, pad in element.pads.items():
+            for pad_name, pad in element.smd_pads.items():
                 writer.writerow([overall_index, element_name, element.package,
-                                 pad_index, pad_name, round(pad.x, 3), round(pad.y, 3), pad.width, pad.height, pad.rotation, pad.net])
+                                 pad_index, pad_name, round(pad.x, 3), round(pad.y, 3), pad.length, pad.width,
+                                 pad.rotation, pad.net])
 
                 pad_index += 1
                 overall_index += 1
@@ -172,10 +230,10 @@ def extract_nets(xml_root, elements):
             element_name = contact.attrib["element"]
             pad_name = contact.attrib["pad"]
 
-            if(element_name in elements):
+            if element_name in elements:
                 element = elements[element_name]
-                if(pad_name in element.pads):
-                    element.pads[pad_name].net = signal_name
+                if pad_name in element.smd_pads:
+                    element.smd_pads[pad_name].net = signal_name
 
 
 def get_board_dimensions(xml_root):
@@ -196,13 +254,21 @@ def get_board_dimensions(xml_root):
         if float(dimension.attrib["y2"]) > max_y:
             max_y = float(dimension.attrib["y2"])
 
-    return max_x - min_x, max_y - min_y
+    return min_x, min_y, max_x - min_x, max_y - min_y
+
+
+def export_layer(file_name_without_ext, layer_name, element_list, board_x, board_y, board_width, board_height):
+    file_name = str.format("{0}_{1}", file_name_without_ext, layer_name)
+    if os.path.isfile(file_name + ".png"):
+        svg_output.create_svg(file_name + ".png",
+                              file_name + "_preview", element_list, board_x, board_y, board_width, board_height)
+
+    output_csv(file_name + ".csv", element_list)
 
 
 def main():
-
     # Check argument count
-    if (len(sys.argv) != 2):
+    if len(sys.argv) != 2:
         print("Wrong argument count. Usage: extract_data_pad.py <eagle .brd>")
         sys.exit(1)
 
@@ -216,7 +282,8 @@ def main():
     xml_root = tree.getroot()
 
     # Find board dimensions for visualization
-    board_width, board_height = get_board_dimensions(xml_root)
+    board_x, board_y, board_width, board_height = get_board_dimensions(
+        xml_root)
 
     # Make list of available packages
     available_packages = get_available_packages(xml_root)
@@ -234,17 +301,10 @@ def main():
     extract_nets(xml_root, available_elements_bottom)
 
     # Check if PCB image layer file exists, if yes create output
-    if(os.path.isfile(file_name_without_ext + "_top.png")):
-        svg_output.create_svg(file_name_without_ext + "_top.png",
-                              file_name_without_ext + "_top_preview", available_elements_top, board_width, board_height)
-
-    output_csv(file_name_without_ext + "_top.csv", available_elements_top)
-
-    if(os.path.isfile(file_name_without_ext + "_bottom.png")):
-        svg_output.create_svg(file_name_without_ext + "_bottom.png",
-                              file_name_without_ext + "_bottom_preview", available_elements_bottom, board_width, board_height)
-
-    output_csv(file_name_without_ext + "_bottom.csv", available_elements_bottom)
+    export_layer(file_name_without_ext, "top",
+                 available_elements_top, board_x, board_y, board_width, board_height)
+    export_layer(file_name_without_ext, "bottom",
+                 available_elements_bottom, board_x, board_y, board_width, board_height)
 
 
 main()

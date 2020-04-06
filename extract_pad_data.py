@@ -86,7 +86,7 @@ def get_available_packages(xml_root):
     return available_packages
 
 
-def extract_element_info(root, available_packages, layer="top"):
+def extract_element_info(root, available_packages, layer: Layer):
     available_elements = dict()
 
     element_list = root.findall(".//element")
@@ -95,31 +95,24 @@ def extract_element_info(root, available_packages, layer="top"):
         rotation_angle = 0
         if "rot" in item.attrib:
             rotation_angle = item.attrib["rot"]
-            if (rotation_angle.startswith("MR") and layer == "top") or (
-                    rotation_angle.startswith("R") and layer == "bottom"):
+            if (rotation_angle.startswith("MR") and layer == Layer.TOP) or (
+                    rotation_angle.startswith("R") and layer == Layer.BOTTOM):
                 continue
             # else:
             # Find first digit position
             digit_position = re.search(r"\d", rotation_angle)
             rotation_angle = rotation_angle[digit_position.start():]
-        elif layer == 'bottom':
+        elif layer == Layer.BOTTOM:
             continue
 
         package_name = item.attrib["package"]
         x = float(item.attrib["x"])
-        if layer == "bottom":
+        if layer == Layer.BOTTOM:
             x = -x
         y = float(item.attrib["y"])
         element = Element(
             package_name, defaultdict(), defaultdict(), x, y)
         element_name = item.attrib["name"]
-
-        # Temporal limit to certain element for testing
-        # if not package_name.startswith("DFN") and not package_name.startswith("QFN"):
-        #    continue
-
-        #if element_name != "U$5":
-        #    continue
 
         available_elements[element_name] = element
 
@@ -258,7 +251,7 @@ def get_board_dimensions(xml_root):
 
 
 def export_layer(file_name_without_ext, layer_name, element_list, board_x, board_y, board_width, board_height):
-    file_name = str.format("{0}_{1}", file_name_without_ext, layer_name)
+    file_name = str.format("{0}_{1}", file_name_without_ext, layer_name.name.lower())
     if os.path.isfile(file_name + ".png"):
         svg_output.create_svg(file_name + ".png",
                               file_name + "_preview", element_list, board_x, board_y, board_width, board_height)
@@ -289,21 +282,19 @@ def main():
     available_packages = get_available_packages(xml_root)
 
     # Iterate through elements on the board
-    available_elements_top = dict()
     available_elements_top = extract_element_info(
-        xml_root, available_packages, "top")
+        xml_root, available_packages, Layer.TOP)
 
-    available_elements_bottom = dict()
     available_elements_bottom = extract_element_info(
-        xml_root, available_packages, "bottom")
+        xml_root, available_packages, Layer.BOTTOM)
 
     extract_nets(xml_root, available_elements_top)
     extract_nets(xml_root, available_elements_bottom)
 
     # Check if PCB image layer file exists, if yes create output
-    export_layer(file_name_without_ext, "top",
+    export_layer(file_name_without_ext, Layer.TOP,
                  available_elements_top, board_x, board_y, board_width, board_height)
-    export_layer(file_name_without_ext, "bottom",
+    export_layer(file_name_without_ext, Layer.BOTTOM,
                  available_elements_bottom, board_x, board_y, board_width, board_height)
 
 

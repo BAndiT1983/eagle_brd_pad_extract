@@ -17,32 +17,34 @@ def draw_legend(d):
                        fill="yellow", transform="translate(550, -320) rotate(-30)"))
 
 
-def draw_via_pads(d, via_list, factor_x, factor_y):
+def draw_via_pads(d, via_list, factor):
     for via_name, via in via_list:
-        via_x = float(via.x) * factor_x
-        via_y = float(via.y) * factor_y
+        via_x = float(via.x) * factor
+        via_y = float(via.y) * factor
 
-        via_length = float(via.length) * factor_x
-        via_drill = float(via.drill) * factor_y
+        via_length = float(via.length) * factor
+        via_width = float(via.width) * factor
+
+        via_drill = float(via.drill) * factor
 
         rotation = str.format(
             "translate({1}, {2}) rotate({0}) ", str(-via.rotation), str(via_x), str(-via_y))
 
         color = "lightgreen"
+        d.append(draw.Rectangle(-via_width / 2, -via_drill / 2 - 0.25 * factor,
+                                via_width, via_length, fill=color, stroke_width=1, stroke="black", opacity="0.7",
+                                transform=rotation, rx=via_width / 2, ry=via_width / 2))
         d.append(draw.Circle(via_x, via_y,
-                             via_drill / 2, fill=color, stroke_width=1, stroke="black", opacity="0.7"))
-        d.append(draw.Rectangle(-via_drill / 2, 0,
-                                via_drill, via_length, fill=color, stroke_width=1, stroke="black", opacity="0.7",
-                                transform=rotation))
+                             via_drill / 2, fill="orange", stroke_width=1, stroke="black", opacity="0.7"))
 
 
-def draw_smd_pads(d, smd_list, factor_x, factor_y):
+def draw_smd_pads(d, smd_list, factor):
     for pad_name, pad in smd_list:
-        pad_x = float(pad.x) * factor_x
-        pad_y = float(pad.y) * factor_y
+        pad_x = float(pad.x) * factor
+        pad_y = float(pad.y) * factor
 
-        pad_width = float(pad.width) * factor_x
-        pad_length = float(pad.length) * factor_y
+        pad_width = float(pad.width) * factor
+        pad_length = float(pad.length) * factor
 
         # rotation=str.format(
         #    "translate({0}, {1})", str(pad_x), str(-pad_y))
@@ -66,21 +68,20 @@ def draw_smd_pads(d, smd_list, factor_x, factor_y):
 def create_svg(input_image_file, output_image_name, element_list, board_x, board_y, board_width, board_height):
     image_width, image_height = get_image_size(input_image_file)
 
-    factor_x = image_width / board_width
-    factor_y = image_height / board_height
+    factor = (image_width / board_width + image_height / board_height) / 2 
 
     # Fixed size for PCB image
-    d = draw.Drawing(image_width, image_height, origin=(board_x * factor_x, board_y * factor_y))
+    d = draw.Drawing(image_width, image_height, origin=(board_x * factor, board_y * factor))
 
     # Draw background
-    d.append(draw.Image(board_x * factor_x, board_y * factor_y,
+    d.append(draw.Image(board_x * factor, board_y * factor,
                         image_width, image_height, input_image_file))
 
-    #draw_legend(d)
+    # draw_legend(d)
 
     for item in element_list.values():
-        draw_via_pads(d, item.via_pads.items(), factor_x, factor_y)
-        draw_smd_pads(d, item.smd_pads.items(), factor_x, factor_y)
+        draw_via_pads(d, item.via_pads.items(), factor)
+        draw_smd_pads(d, item.smd_pads.items(), factor)
 
     d.setRenderSize(image_width, image_height)
     d.savePng(output_image_name + ".png")

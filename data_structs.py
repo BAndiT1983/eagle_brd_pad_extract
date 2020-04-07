@@ -8,6 +8,12 @@ class Layer(Enum):
     BOTTOM = 2
 
 
+class PadType(Enum):
+    SMD = 1
+    THT = 2
+    VIA = 3
+
+
 @dataclass
 class Pad:
     x: float = 0.0
@@ -16,12 +22,12 @@ class Pad:
     width: float = 0.0
     rotation: int = 0
     layer: Layer = Layer.TOP
+    net: str = ""
 
 
 @dataclass
 class SMDPad(Pad):
-    width: float = 0.0
-    net: str = ""
+    dummy: int = 0
 
 
 @dataclass
